@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 NoSQL Query Executor using OpenAI and MongoEngine
-Executes MongoDB queries against the sample_mflix database using MongoEngine ODM
+Executes MongoDB queries against the sample_supplies database using MongoEngine ODM
 Returns structured JSON output with query and results
 """
 
@@ -10,7 +10,7 @@ import json
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 from dotenv import load_dotenv
-from mongoengine import connect, Document, StringField, IntField, ListField, DateTimeField, ReferenceField, EmbeddedDocumentField, EmbeddedDocument, FloatField, DictField
+from mongoengine import connect, Document, StringField, IntField, ListField, DateTimeField, ReferenceField, EmbeddedDocumentField, EmbeddedDocument, FloatField, DictField, BooleanField, DecimalField
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage
 import logging
@@ -27,224 +27,120 @@ logging.basicConfig(
 )
 logger = logging.getLogger("NoSQLAgent")
 
-# MongoEngine Document Models
-class ImdbInfo(EmbeddedDocument):
-    """Embedded document for IMDB information"""
-    rating = FloatField()
-    votes = IntField()
-    id = IntField()
+# MongoEngine Document Models for Sample Supplies
 
-class TomatoesViewer(EmbeddedDocument):
-    """Embedded document for Tomatoes viewer ratings"""
-    rating = FloatField()
-    numReviews = IntField()
-    meter = IntField()
 
-class TomatoesCritic(EmbeddedDocument):
-    """Embedded document for Tomatoes critic ratings"""
-    rating = FloatField()
-    numReviews = IntField()
-    meter = IntField()
+class Customer(EmbeddedDocument):
+    """Embedded document for customer information"""
+    age = IntField()
+    email = StringField()
+    gender = StringField()
+    satisfaction = IntField()
 
-class TomatoesInfo(EmbeddedDocument):
-    """Embedded document for Tomatoes information"""
-    viewer = EmbeddedDocumentField(TomatoesViewer)
-    critic = EmbeddedDocumentField(TomatoesCritic)
-    fresh = IntField()
-    rotten = IntField()
-    production = StringField()
 
-class Awards(EmbeddedDocument):
-    """Embedded document for awards information"""
-    wins = IntField()
-    nominations = IntField()
-    text = StringField()
+class Item(EmbeddedDocument):
+    """Embedded document for item information"""
+    name = StringField()
+    price = DecimalField()
+    quantity = IntField()
+    tags = ListField(StringField())
 
-class Address(EmbeddedDocument):
-    """Embedded document for address information"""
-    street1 = StringField()
-    city = StringField()
-    state = StringField()
-    zipcode = StringField()
 
-class GeoLocation(EmbeddedDocument):
-    """Embedded document for geolocation"""
-    type = StringField()
-    coordinates = ListField(FloatField())
+class Sale(Document):
+    """Sale document model for sample_supplies"""
+    couponUsed = BooleanField()
+    customer = EmbeddedDocumentField(Customer)
+    items = ListField(EmbeddedDocumentField(Item))
+    purchaseMethod = StringField()
+    saleDate = DateTimeField()
+    storeLocation = StringField()
 
-class Location(EmbeddedDocument):
-    """Embedded document for location information"""
-    address = EmbeddedDocumentField(Address)
-    geo = EmbeddedDocumentField(GeoLocation)
-
-class Movie(Document):
-    """Movie document model"""
-    title = StringField(required=True, max_length=200)
-    year = IntField()
-    genres = ListField(StringField(max_length=50))
-    cast = ListField(StringField())
-    directors = ListField(StringField())
-    writers = ListField(StringField())
-    plot = StringField()
-    fullplot = StringField()
-    runtime = IntField()
-    released = DateTimeField()
-    countries = ListField(StringField())
-    languages = ListField(StringField())
-    poster = StringField()
-    type = StringField()
-    imdb = EmbeddedDocumentField(ImdbInfo)
-    tomatoes = EmbeddedDocumentField(TomatoesInfo)
-    awards = EmbeddedDocumentField(Awards)
-    num_mflix_comments = IntField()
-    
     meta = {
-        'collection': 'movies',
+        'collection': 'sales',
         'allow_inheritance': True
     }
 
-class Comment(Document):
-    """Comment document model"""
-    name = StringField()
-    email = StringField()
-    movie_id = ReferenceField(Movie)
-    text = StringField()
-    date = DateTimeField()
-    
-    meta = {
-        'collection': 'comments'
-    }
-
-class User(Document):
-    """User document model"""
-    name = StringField()
-    email = StringField()
-    password = StringField()
-    
-    meta = {
-        'collection': 'users'
-    }
-
-class Session(Document):
-    """Session document model"""
-    user_id = StringField()
-    jwt = StringField()
-    
-    meta = {
-        'collection': 'sessions'
-    }
-
-class Theater(Document):
-    """Theater document model"""
-    theaterId = IntField()
-    location = EmbeddedDocumentField(Location)
-    
-    meta = {
-        'collection': 'theaters'
-    }
 
 class NoSQLQueryExecutor:
-    """NoSQL Query Executor for Sample Mflix Database using MongoEngine"""
-    
+    """NoSQL Query Executor for Sample Supplies Database using MongoEngine"""
+
     def __init__(self, connection_string: str = None):
         """
         Initialize the NoSQL Query Executor
-        
+
         Args:
             connection_string: MongoDB connection string (defaults to MONGO_DB from .env)
         """
         self.connection_string = connection_string or os.getenv("MONGO_DB")
         if not self.connection_string:
-            raise ValueError("MongoDB connection string not found. Set MONGO_DB in .env file")
-        
+            raise ValueError(
+                "MongoDB connection string not found. Set MONGO_DB in .env file")
+
         # Connect to MongoDB using MongoEngine
         try:
             # Extract database name from connection string
-            db_name = "sample_mflix"
+            db_name = "sample_supplies"
             if "mongodb+srv://" in self.connection_string:
                 # For Atlas connections, we need to specify the database name
                 connect(db=db_name, host=self.connection_string)
             else:
                 # For local connections
                 connect(db=db_name, host=self.connection_string)
-            
+
             print("Successfully connected to MongoDB using MongoEngine!")
-            
+
         except Exception as e:
             print(f"Failed to connect to MongoDB: {e}")
             raise e
-        
+
         self.model = ChatOpenAI(
             model="gpt-4o-mini",
             api_key=os.getenv("OPENAPI_KEY")
         )
-        
+
         # Database schema context
         self.db_context = self._build_database_context()
-        
+
     def _build_database_context(self) -> str:
-        """Build concise database context for sample_mflix schema using MongoEngine models"""
+        """Build concise database context for sample_supplies schema using MongoEngine models"""
         context = """
-MONGODB DATABASE SCHEMA FOR SAMPLE_MFLIX (MongoEngine Models)
+MONGODB DATABASE SCHEMA FOR SAMPLE_SUPPLIES (MongoEngine Models)
 
-DATABASE: sample_mflix
+DATABASE: sample_supplies
 
-1. MOVIES COLLECTION (Movie Document):
-   - title: String (required, max 200 chars)
-   - year: Integer
-   - genres: List[String]
-   - cast: List[String]
-   - directors: List[String]
-   - writers: List[String]
-   - plot: String
-   - fullplot: String
-   - runtime: Integer
-   - released: DateTime
-   - countries: List[String]
-   - languages: List[String]
-   - poster: String (URL)
-   - type: String
-   - imdb: EmbeddedDocument (rating: Float, votes: Integer, id: Integer)
-   - tomatoes: EmbeddedDocument (viewer/critic ratings, fresh/rotten counts)
-   - awards: EmbeddedDocument (wins: Integer, nominations: Integer, text: String)
-   - num_mflix_comments: Integer
-
-2. COMMENTS COLLECTION (Comment Document):
-   - name: String
-   - email: String
-   - movie_id: ReferenceField(Movie)
-   - text: String
-   - date: DateTime
-
-3. USERS COLLECTION (User Document):
-   - name: String
-   - email: String
-   - password: String
-
-4. SESSIONS COLLECTION (Session Document):
-   - user_id: String
-   - jwt: String
-
-5. THEATERS COLLECTION (Theater Document):
-   - theaterId: Integer
-   - location: EmbeddedDocument (address: Address, geo: GeoLocation)
+SALES COLLECTION (Sale Document):
+   - couponUsed: Boolean
+   - customer: EmbeddedDocument
+     - age: Integer
+     - email: String
+     - gender: String
+     - satisfaction: Integer (1-5 rating)
+   - items: List[EmbeddedDocument]
+     - name: String
+     - price: Decimal128
+     - quantity: Integer
+     - tags: List[String]
+   - purchaseMethod: String (e.g., "Online", "In store", "Phone")
+   - saleDate: DateTime
+   - storeLocation: String
 
 MongoEngine Query Patterns:
-- Movie.objects.filter(year=2020)
-- Movie.objects.filter(genres__in=['Action'], imdb__rating__gte=7)
-- Movie.objects.filter(cast__in=['Tom Hanks'])
-- Movie.objects.filter(directors__in=['Christopher Nolan'])
-- Movie.objects.filter(released__gte=datetime(1990,1,1), released__lte=datetime(1999,12,31))
-- Movie.objects.filter(runtime__gte=120)
-- Movie.objects.filter(imdb__rating__gte=8).order_by('-imdb__rating')
-- Movie.objects.filter(awards__wins__gte=1)
-- Comment.objects.filter(movie_id__in=Movie.objects.filter(genres='Action'))
-- Aggregation: Movie.objects.aggregate([...])
-- Text search: Movie.objects.search_text('search term')
-- Geospatial: Theater.objects.filter(location__geo__near=[longitude, latitude])
+- Sale.objects.filter(couponUsed=True)
+- Sale.objects.filter(customer__age__gte=30)
+- Sale.objects.filter(customer__gender="F")
+- Sale.objects.filter(customer__satisfaction__gte=4)
+- Sale.objects.filter(items__name="pencil")
+- Sale.objects.filter(items__tags__in=["office"])
+- Sale.objects.filter(purchaseMethod="Online")
+- Sale.objects.filter(storeLocation="Denver")
+- Sale.objects.filter(saleDate__gte=datetime(2023,1,1))
+- Sale.objects.filter(items__price__gte=10.0)
+- Sale.objects.filter(items__quantity__gte=5)
+- Aggregation: Sale.objects.aggregate([...])
+- Text search: Sale.objects.search_text('search term')
 """
         return context
-    
+
     def execute_query(self, query: str) -> Dict[str, Any]:
         """
         Execute a MongoDB query using MongoEngine and return results
@@ -256,37 +152,96 @@ MongoEngine Query Patterns:
                 logger.info("Detected aggregation pipeline.")
                 pipeline = json.loads(query)
                 results = []
-                collections_to_try = [Movie, Comment, User, Session, Theater]
+                collections_to_try = [Sale]
                 for collection_class in collections_to_try:
                     try:
-                        logger.info(f"Trying aggregation on collection: {collection_class.__name__}")
-                        results = list(collection_class.objects.aggregate(pipeline))
+                        logger.info(
+                            f"Trying aggregation on collection: {collection_class.__name__}")
+                        results = list(
+                            collection_class.objects.aggregate(pipeline))
                         if results:
-                            logger.info(f"Aggregation returned {len(results)} results from {collection_class.__name__}")
+                            logger.info(
+                                f"Aggregation returned {len(results)} results from {collection_class.__name__}")
                             break
                     except Exception as agg_e:
-                        logger.warning(f"Aggregation failed on {collection_class.__name__}: {agg_e}")
+                        logger.warning(
+                            f"Aggregation failed on {collection_class.__name__}: {agg_e}")
                         continue
             else:
                 logger.info("Detected find query.")
                 query_dict = json.loads(query)
-                collection_name = query_dict.get('collection', 'movies')
+                collection_name = query_dict.get('collection', 'sales')
                 find_query = query_dict.get('query', {})
                 projection = query_dict.get('projection', {})
-                logger.info(f"Collection: {collection_name}, Query: {find_query}, Projection: {projection}")
+                logger.info(
+                    f"Collection: {collection_name}, Query: {find_query}, Projection: {projection}")
+
+                # Convert dot notation to double underscore notation for MongoEngine
+                def convert_query_for_mongoengine(query_dict):
+                    """Convert MongoDB query to MongoEngine format"""
+                    converted = {}
+                    for key, value in query_dict.items():
+                        if '.' in key:
+                            # Convert customer.age to customer__age
+                            new_key = key.replace('.', '__')
+                            converted[new_key] = value
+                        else:
+                            converted[key] = value
+                    return converted
+
+                # Convert projection fields as well
+                def convert_projection_for_mongoengine(proj_dict):
+                    """Convert projection to MongoEngine format"""
+                    converted = {}
+                    for key, value in proj_dict.items():
+                        if '.' in key:
+                            # Convert customer.email to customer__email
+                            new_key = key.replace('.', '__')
+                            converted[new_key] = value
+                        else:
+                            converted[key] = value
+                    return converted
+
+                # Convert query and projection
+                find_query = convert_query_for_mongoengine(find_query)
+                projection = convert_projection_for_mongoengine(projection)
+
+                logger.info(f"Converted query: {find_query}")
+                logger.info(f"Converted projection: {projection}")
+
                 collection_map = {
-                    'movies': Movie,
-                    'comments': Comment,
-                    'users': User,
-                    'sessions': Session,
-                    'theaters': Theater
+                    'sales': Sale
                 }
-                document_class = collection_map.get(collection_name, Movie)
-                queryset = document_class.objects(**find_query)
+                document_class = collection_map.get(collection_name, Sale)
+
+                # Build query using MongoEngine syntax
+                query_kwargs = {}
+                for key, value in find_query.items():
+                    if isinstance(value, dict) and any(op in str(value) for op in ['$gt', '$gte', '$lt', '$lte', '$ne']):
+                        # Handle MongoDB operators
+                        for op, op_value in value.items():
+                            if op == '$gt':
+                                query_kwargs[f"{key}__gt"] = op_value
+                            elif op == '$gte':
+                                query_kwargs[f"{key}__gte"] = op_value
+                            elif op == '$lt':
+                                query_kwargs[f"{key}__lt"] = op_value
+                            elif op == '$lte':
+                                query_kwargs[f"{key}__lte"] = op_value
+                            elif op == '$ne':
+                                query_kwargs[f"{key}__ne"] = op_value
+                    else:
+                        query_kwargs[key] = value
+
+                logger.info(f"MongoEngine query kwargs: {query_kwargs}")
+                queryset = document_class.objects(**query_kwargs)
+
                 # Remove '_id' from projection for MongoEngine compatibility
                 if projection and '_id' in projection:
-                    logger.info("Removing '_id' from projection for MongoEngine compatibility.")
+                    logger.info(
+                        "Removing '_id' from projection for MongoEngine compatibility.")
                     projection.pop('_id')
+
                 if projection:
                     fields = {}
                     exclude_fields = {}
@@ -299,8 +254,10 @@ MongoEngine Query Patterns:
                         queryset = queryset.only(*fields.keys())
                     if exclude_fields:
                         queryset = queryset.exclude(*exclude_fields.keys())
+
                 results = list(queryset)
                 logger.info(f"Find query returned {len(results)} results.")
+
             def convert_to_dict(obj):
                 if hasattr(obj, 'to_mongo'):
                     doc_dict = obj.to_mongo().to_dict()
@@ -337,35 +294,36 @@ MongoEngine Query Patterns:
                 "data": [],
                 "execution_time_seconds": elapsed
             }
-    
+
     def generate_and_execute_query(self, prompt: str) -> Dict[str, Any]:
         """
         Generate MongoDB query from natural language prompt and execute it using MongoEngine
-        
+
         Args:
             prompt: Natural language description of what data to retrieve
-            
+
         Returns:
             Structured response with generated query and results
         """
         # Create system prompt with database context
         system_prompt = """
-You are a MongoDB query generator for the Sample Mflix Database using MongoEngine ODM. 
+You are a MongoDB query generator for the Sample Supplies Database using MongoEngine ODM. 
 
 """ + self.db_context + """
 
 INSTRUCTIONS:
 1. Generate ONLY valid MongoDB queries (find operations) or aggregation pipelines
-2. Use appropriate $lookup for joining collections (e.g., comments with movies)
-3. Use $match for filtering conditions (genre, year, cast, director, etc.)
-4. Use $project for field selection
-5. Use $sort for meaningful ordering
-6. Use $limit to limit results (default 20 if not specified)
-7. Return ONLY the MongoDB query in JSON format, no explanations
+2. Use $match for filtering conditions (customer age, gender, satisfaction, items, purchase method, etc.)
+3. Use $project for field selection
+4. Use $sort for meaningful ordering
+5. Use $limit to limit results (default 20 if not specified)
+6. Use $unwind for array operations on items
+7. Use $group for aggregations (total sales, average satisfaction, etc.)
+8. Return ONLY the MongoDB query in JSON format, no explanations
 
 FOR FIND QUERIES, return format:
 {
-  "collection": "collection_name",
+  "collection": "sales",
   "query": { "field": "value" },
   "projection": { "field": 1, "_id": 0 }
 }
@@ -373,36 +331,41 @@ FOR FIND QUERIES, return format:
 FOR AGGREGATION PIPELINES, return format:
 [
   { "$match": { "field": "value" } },
-  { "$lookup": { "from": "collection", "localField": "field", "foreignField": "field", "as": "alias" } },
-  { "$project": { "field": 1 } }
+  { "$unwind": "$items" },
+  { "$group": { "_id": "$field", "total": { "$sum": "$items.price" } } }
 ]
 
 EXAMPLE PROMPTS AND QUERIES:
-- "Show all movies": { "collection": "movies", "query": {}, "projection": { "title": 1, "year": 1, "genres": 1, "_id": 0 } }
-- "Movies from 2020": { "collection": "movies", "query": { "year": 2020 }, "projection": { "title": 1, "year": 1, "_id": 0 } }
-- "Action movies with high ratings": [{ "$match": { "genres": "Action", "imdb.rating": { "$gte": 7 } } }, { "$project": { "title": 1, "imdb.rating": 1, "year": 1, "_id": 0 } }, { "$sort": { "imdb.rating": -1 } }, { "$limit": 20 }]
-- "Movies with comments": [{ "$lookup": { "from": "comments", "localField": "_id", "foreignField": "movie_id", "as": "comments" } }, { "$match": { "comments": { "$ne": [] } } }, { "$project": { "title": 1, "comment_count": { "$size": "$comments" }, "_id": 0 } }, { "$sort": { "comment_count": -1 } }]
-- "Top rated directors": [{ "$unwind": "$directors" }, { "$group": { "_id": "$directors", "avg_rating": { "$avg": "$imdb.rating" }, "movie_count": { "$sum": 1 } } }, { "$match": { "avg_rating": { "$gte": 7 } } }, { "$sort": { "avg_rating": -1 } }, { "$limit": 10 }]
+- "Show all sales": { "collection": "sales", "query": {}, "projection": { "saleDate": 1, "storeLocation": 1, "customer.email": 1, "_id": 0 } }
+- "Sales with coupons": { "collection": "sales", "query": { "couponUsed": true }, "projection": { "saleDate": 1, "customer.email": 1, "_id": 0 } }
+- "High satisfaction customers": { "collection": "sales", "query": { "customer.satisfaction": { "$gte": 4 } }, "projection": { "customer.email": 1, "customer.satisfaction": 1, "_id": 0 } }
+- "Online purchases": { "collection": "sales", "query": { "purchaseMethod": "Online" }, "projection": { "saleDate": 1, "customer.email": 1, "_id": 0 } }
+- "Customer emails in Denver with age above 40": { "collection": "sales", "query": { "storeLocation": "Denver", "customer.age": { "$gt": 40 } }, "projection": { "customer.email": 1, "_id": 0 } }
+- "Sales by location": [{ "$group": { "_id": "$storeLocation", "count": { "$sum": 1 } } }, { "$sort": { "count": -1 } }]
+- "v": [{ "$unwind": "$items" }, { "$group": { "_id": "$items.name", "total_quantity": { "$sum": "$items.quantity" }, "total_revenue": { "$sum": "$items.price" } } }, { "$sort": { "total_revenue": -1 } }]
+- "Average satisfaction by gender": [{ "$group": { "_id": "$customer.gender", "avg_satisfaction": { "$avg": "$customer.satisfaction" }, "count": { "$sum": 1 } } }, { "$sort": { "avg_satisfaction": -1 } }]
+- "Sales by age group": [{ "$group": { "_id": { "$cond": [{ "$lt": ["$customer.age", 30] }, "Under 30", { "$cond": [{ "$lt": ["$customer.age", 50] }, "30-49", "50+"] }] }, "count": { "$sum": 1 } } }, { "$sort": { "count": -1 } }]
 """
-        
+
         # Generate MongoDB query
         messages = [
             HumanMessage(content=f"System: {system_prompt}"),
             HumanMessage(content=f"Generate MongoDB query for: {prompt}")
         ]
-        
+
         response = self.model.invoke(messages)
         generated_query = response.content.strip()
-        
+
         # Clean up the query (remove markdown if present)
         if generated_query.startswith("```json"):
-            generated_query = generated_query.replace("```json", "").replace("```", "").strip()
+            generated_query = generated_query.replace(
+                "```json", "").replace("```", "").strip()
         elif generated_query.startswith("```"):
             generated_query = generated_query.replace("```", "").strip()
-        
+
         # Execute the generated query
         query_result = self.execute_query(generated_query)
-        
+
         # Return structured response
         return {
             "prompt": prompt,
@@ -410,62 +373,64 @@ EXAMPLE PROMPTS AND QUERIES:
             "execution_result": query_result,
             "timestamp": self._get_timestamp()
         }
-    
+
     def _get_timestamp(self) -> str:
         """Get current timestamp"""
         return datetime.now().isoformat()
-    
+
     def get_sample_queries(self) -> List[str]:
         """Get sample query prompts for testing"""
         return [
-            "Show all movies from 2020",
-            "Find action movies with high ratings",
-            "Show movies with the most comments",
-            "List top rated directors",
-            "Find movies starring Tom Hanks",
-            "Show movies with awards",
-            "List movies by genre",
-            "Find movies released in the 1990s",
-            "Show movies with high IMDB ratings",
-            "Find movies with specific cast members",
-            "Show movies with plot summaries",
-            "List movies by country",
-            "Find movies with specific directors",
-            "Show movies with runtime over 2 hours",
-            "Find movies with specific awards"
+            "Show all sales with coupons used",
+            "Find sales with high customer satisfaction (4 or 5)",
+            "Show online purchases",
+            "List sales by store location",
+            "Find sales with specific items like pencils",
+            "Show sales by customer age groups",
+            "List total sales by item",
+            "Find sales with specific tags",
+            "Show average satisfaction by gender",
+            "Find sales from specific date ranges",
+            "List sales by purchase method",
+            "Show sales with high-value items",
+            "Find sales by customer email domain",
+            "Show sales with multiple items",
+            "List sales by customer satisfaction level"
         ]
-    
+
     def close_connection(self):
         """Close the MongoDB connection"""
         # MongoEngine handles connection cleanup automatically
         pass
 
+
 def create_nosql_agent() -> NoSQLQueryExecutor:
     """Create a pre-configured NoSQL Query Executor"""
     return NoSQLQueryExecutor()
 
+
 def interactive_nosql_chat():
     """Run an interactive NoSQL query session"""
-    print("🎬 NoSQL Query Executor (Sample Mflix Database) - MongoEngine Edition")
+    print("🛒 NoSQL Query Executor (Sample Supplies Database) - MongoEngine Edition")
     print("=" * 60)
-    
+
     try:
         agent = create_nosql_agent()
         print("✅ Connected to MongoDB successfully using MongoEngine")
-        print("📊 Sample Mflix database context loaded")
-        
+        print("📊 Sample Supplies database context loaded")
+
         print("\n💡 Sample queries you can try:")
         sample_queries = agent.get_sample_queries()
         for i, query in enumerate(sample_queries[:5], 1):
             print(f"{i}. {query}")
-        
+
         print("\nType 'quit' to exit, 'samples' to see more examples")
         print("-" * 50)
-        
+
         while True:
             try:
                 user_input = input("\n🔍 Enter your query: ").strip()
-                
+
                 if user_input.lower() == 'quit':
                     print("👋 Goodbye!")
                     break
@@ -476,21 +441,21 @@ def interactive_nosql_chat():
                     continue
                 elif not user_input:
                     continue
-                
+
                 # Generate and execute query
                 print("🤖 Generating MongoDB query...")
                 result = agent.generate_and_execute_query(user_input)
-                
+
                 # Display results in structured format
                 print("\n📊 RESULTS:")
                 print(json.dumps(result, indent=2, default=str))
-                
+
             except KeyboardInterrupt:
                 print("\n\n👋 Goodbye!")
                 break
             except Exception as e:
                 print(f"\n❌ Error: {e}")
-                
+
     except Exception as e:
         print(f"❌ Failed to initialize NoSQL agent: {e}")
         print("Make sure MONGO_DB and OPENAPI_KEY are set in your .env file")
@@ -498,16 +463,17 @@ def interactive_nosql_chat():
         if 'agent' in locals():
             agent.close_connection()
 
+
 if __name__ == "__main__":
     # Check if required environment variables are available
     if not os.getenv("OPENAPI_KEY"):
         print("❌ Error: OPENAPI_KEY not found in environment variables")
         print("Please make sure your .env file contains: OPENAPI_KEY=your_api_key_here")
         exit(1)
-    
+
     if not os.getenv("MONGO_DB"):
         print("❌ Error: MONGO_DB not found in environment variables")
         print("Please make sure your .env file contains: MONGO_DB=mongodb+srv://anton:<db_password>@cluster0.ku0y7rt.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
         exit(1)
-    
+
     interactive_nosql_chat()

@@ -10,6 +10,7 @@
 [![Web Interface](https://img.shields.io/badge/Web%20Interface-Flask%20API-red.svg)](https://flask.palletsprojects.com/)
 
 ## 🎯 Project Overview
+
 https://www.youtube.com/watch?v=aKE-0c00JQE
 <img width="1438" alt="Screenshot 2025-06-27 at 1 30 14 PM" src="https://github.com/user-attachments/assets/6d4cb976-40f4-4152-b681-ae8580e9b21c" />
 
@@ -32,6 +33,7 @@ LocoForge is a cutting-edge **AI-powered database orchestration system** that in
 ## 🏗️ Architecture
 
 ### Core Components
+
 ![Editor _ Mermaid Chart-2025-06-27-083351](https://github.com/user-attachments/assets/8221623d-2f14-4bb8-86f5-feb5746d32bb)
 
 ### Enhanced Workflow Graph
@@ -42,7 +44,7 @@ The system implements a sophisticated **state machine** using LangGraph with the
 2. **`decompose_query`** - Complex query decomposition into sub-queries
 3. **`route_to_agents`** - Intelligent routing decision making
 4. **`sql_agent`** - SQL query execution (Employee Management)
-5. **`nosql_agent`** - NoSQL query execution (Movie Database)
+5. **`nosql_agent`** - NoSQL query execution (Supplies Database)
 6. **`data_engineer`** - Professional handling of unclear/technical queries
 7. **`aggregate_results`** - Multi-source result combination
 8. **`update_context`** - Conversation state management
@@ -58,7 +60,7 @@ The system implements a sophisticated **state machine** using LangGraph with the
 class OrchestratorState(TypedDict):
     messages: List[BaseMessage]           # Conversation history
     current_query: str                    # Current user query
-    query_domain: QueryDomain            # Classified domain (EMPLOYEE/MOVIES/HYBRID/UNCLEAR/TECHNICAL)
+    query_domain: QueryDomain            # Classified domain (EMPLOYEE/SUPPLIES/HYBRID/UNCLEAR/TECHNICAL)
     query_intent: QueryIntent            # Query intent (SELECT/ANALYZE/COMPARE/AGGREGATE/CLARIFY/EXPLAIN)
     query_complexity: QueryComplexity    # NEW: Complexity assessment (SIMPLE/MEDIUM/COMPLEX)
     sub_queries: Dict[str, str]          # Decomposed sub-queries
@@ -83,7 +85,7 @@ def route_decision(state: OrchestratorState) -> str:
 
     if domain == QueryDomain.EMPLOYEE:
         return "sql_only"
-    elif domain == QueryDomain.MOVIES:
+    elif domain == QueryDomain.SUPPLIES:
         return "nosql_only"
     elif domain == QueryDomain.HYBRID:
         return "both_agents"
@@ -99,20 +101,20 @@ The new **Data Engineer Agent** provides professional handling for:
 
 - **Ambiguous Queries**: "Show me everything", "What's the data?"
 - **Non-Domain Queries**: "What's the weather like?", "Tell me a joke"
-- **Technical Queries**: "SELECT * FROM employees", "Show schema"
+- **Technical Queries**: "SELECT \* FROM employees", "Show schema"
 - **Overly Complex Queries**: Performance-impacting queries
 
 ```python
 class DataEngineerAgent:
     def analyze_query(self, query: str) -> Dict[str, Any]:
         """Analyze query and provide professional guidance"""
-        
+
     def provide_clarification_suggestions(self, query: str, analysis: Dict[str, Any]) -> List[str]:
         """Generate specific clarification suggestions"""
-        
+
     def handle_technical_query(self, query: str) -> Dict[str, Any]:
         """Handle SQL/NoSQL syntax and schema questions"""
-        
+
     def handle_non_domain_query(self, query: str) -> Dict[str, Any]:
         """Handle queries outside system domain"""
 ```
@@ -125,10 +127,10 @@ def classify_intent(self, query: str) -> Tuple[QueryDomain, QueryIntent, QueryCo
     system_prompt = """
     You are an expert query classifier for a hybrid database system with:
     1. SQL Database: Employee management (employees, departments, projects, attendance)
-    2. NoSQL Database: Movie database (movies, comments, users, theaters)
+    2. NoSQL Database: Sample Supplies (sales, customers, items, stores)
 
     Classify the query into:
-    - DOMAIN: employee, movies, hybrid, unclear, technical
+    - DOMAIN: employee, supplies, hybrid, unclear, technical
     - INTENT: select, analyze, compare, aggregate, clarify, explain
     - COMPLEXITY: simple, medium, complex
     """
@@ -151,7 +153,7 @@ GET /api/database/stats
 # Natural language query processing
 POST /api/query
 {
-    "query": "Show me employee salaries and movie ratings"
+    "query": "Show me employee salaries and supplies data"
 }
 
 # Direct SQL query execution
@@ -217,6 +219,7 @@ ENVIRONMENT=development
 ### Quick Start
 
 #### Using the Web Interface
+
 ```bash
 # Start the Flask application
 python app.py
@@ -225,6 +228,7 @@ python app.py
 ```
 
 #### Using the LangGraph Workflow
+
 ```python
 from my_agent.agent import graph
 from my_agent.utils.state import OrchestratorState
@@ -234,8 +238,8 @@ workflow = graph
 
 # Create a query
 state = OrchestratorState(
-    messages=[HumanMessage(content="Show me employee salaries and movie ratings")],
-    current_query="Show me employee salaries and movie ratings"
+    messages=[HumanMessage(content="Show me employee salaries and supplies data")],
+    current_query="Show me employee salaries and supplies data"
 )
 
 # Execute the workflow
@@ -243,7 +247,7 @@ result = workflow.invoke(state)
 print(result["combined_results"])
 ```
 
-## 📊 Database Schemas
+## �� Database Schemas
 
 ### SQL Database (Employee Management)
 
@@ -275,24 +279,30 @@ CREATE TABLE projects (
 );
 ```
 
-### NoSQL Database (Movie Database)
+### NoSQL Database (Supplies Database)
 
 ```javascript
-// Movies collection
+// Sales collection
 {
   "_id": ObjectId,
-  "title": "Movie Title",
-  "year": 2020,
-  "runtime": 120,
-  "plot": "Movie description",
-  "poster": "poster_url",
-  "genres": ["Action", "Drama"],
-  "cast": ["Actor 1", "Actor 2"],
-  "directors": ["Director Name"],
-  "imdb": {
-    "rating": 8.5,
-    "votes": 10000
-  }
+  "couponUsed": true,
+  "customer": {
+    "age": 30,
+    "email": "customer@example.com",
+    "gender": "F",
+    "satisfaction": 5
+  },
+  "items": [
+    {
+      "name": "Office Supplies",
+      "price": 25.99,
+      "quantity": 2,
+      "tags": ["office", "stationery"]
+    }
+  ],
+  "purchaseMethod": "Online",
+  "saleDate": ISODate("2023-01-15"),
+  "storeLocation": "Denver"
 }
 
 // Comments collection
@@ -339,14 +349,15 @@ python test_deployment.py
 "What's the average salary by department?"
 "Find employees hired in the last 6 months"
 
-# Movie queries (NoSQL)
-"Show me all action movies from 2020"
-"What are the top-rated movies this year?"
-"List movies with the most comments"
+# Supplies queries (NoSQL)
+"Show me all sales with high customer satisfaction"
+"What are the top-selling items this year?"
+"List sales by store location"
+"Show total sales by customer age group"
 
-# Hybrid queries (Both databases)
-"Show which employees watched action movies"
-"Compare employee salaries with movie ratings"
+# Hybrid queries (combining both databases)
+"Show which employees bought office supplies"
+"Compare employee salaries with sales data"
 
 # Unclear queries (Data Engineer)
 "Show me everything"

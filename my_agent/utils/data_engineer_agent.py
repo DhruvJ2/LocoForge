@@ -18,16 +18,17 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
+
 class DataEngineerAgent:
     """Professional Data Engineer Agent for handling complex and unclear queries"""
-    
+
     def __init__(self):
         """Initialize the Data Engineer Agent"""
         self.model = ChatOpenAI(
             model="gpt-4o-mini",
             api_key=os.getenv("OPENAPI_KEY") or os.getenv("OPENAI_API_KEY")
         )
-        
+
         # Database context for professional responses
         self.database_context = {
             "sql_database": {
@@ -43,36 +44,36 @@ class DataEngineerAgent:
                 ]
             },
             "nosql_database": {
-                "name": "Sample Mflix Database",
-                "collections": ["movies", "comments", "users", "sessions", "theaters", "embedded_movies"],
-                "description": "NoSQL database containing movie information, user comments, ratings, and theater locations",
-                "key_entities": ["movies", "comments", "users", "sessions", "theaters"],
+                "name": "Sample Supplies Database",
+                "collections": ["sales", "customers", "items", "stores"],
+                "description": "NoSQL database containing sales information, customer data, items, and store locations",
+                "key_entities": ["sales", "customers", "items", "stores"],
                 "sample_queries": [
-                    "Find action movies with high ratings",
-                    "Show movies from 2020",
-                    "List movies with the most comments",
-                    "Show top rated directors"
+                    "Find sales with high customer satisfaction",
+                    "Show sales from 2020",
+                    "List sales by store location",
+                    "Show total sales by item"
                 ]
             }
         }
-    
+
     def analyze_query(self, query: str) -> Dict[str, Any]:
         """
         Analyze a query to determine its nature and provide professional guidance
-        
+
         Args:
             query: User query string
-            
+
         Returns:
             Dictionary with analysis results and recommendations
         """
         system_prompt = self._get_analysis_prompt()
-        
+
         messages = [
             SystemMessage(content=system_prompt),
             HumanMessage(content=f"Analyze this query: {query}")
         ]
-        
+
         try:
             response = self.model.invoke(messages)
             analysis = json.loads(response.content)
@@ -80,28 +81,29 @@ class DataEngineerAgent:
         except Exception as e:
             logger.error(f"Error analyzing query: {e}")
             return self._get_default_analysis(query)
-    
+
     def provide_clarification_suggestions(self, query: str, analysis: Dict[str, Any]) -> List[str]:
         """
         Generate clarification suggestions for unclear queries
-        
+
         Args:
             query: Original query
             analysis: Query analysis results
-            
+
         Returns:
             List of clarification suggestions
         """
         if analysis.get("is_clear", True):
             return []
-        
+
         system_prompt = self._get_clarification_prompt()
-        
+
         messages = [
             SystemMessage(content=system_prompt),
-            HumanMessage(content=f"Query: {query}\nAnalysis: {json.dumps(analysis)}")
+            HumanMessage(
+                content=f"Query: {query}\nAnalysis: {json.dumps(analysis)}")
         ]
-        
+
         try:
             response = self.model.invoke(messages)
             suggestions = json.loads(response.content)
@@ -109,24 +111,24 @@ class DataEngineerAgent:
         except Exception as e:
             logger.error(f"Error generating suggestions: {e}")
             return self._get_default_suggestions(query)
-    
+
     def handle_technical_query(self, query: str) -> Dict[str, Any]:
         """
         Handle technical queries like schema requests, database structure questions
-        
+
         Args:
             query: Technical query
-            
+
         Returns:
             Professional response with technical details
         """
         system_prompt = self._get_technical_prompt()
-        
+
         messages = [
             SystemMessage(content=system_prompt),
             HumanMessage(content=f"Technical query: {query}")
         ]
-        
+
         try:
             response = self.model.invoke(messages)
             return {
@@ -143,24 +145,24 @@ class DataEngineerAgent:
                 "query_type": "technical",
                 "original_query": query
             }
-    
+
     def handle_non_domain_query(self, query: str) -> Dict[str, Any]:
         """
         Handle queries that are outside the system's domain
-        
+
         Args:
             query: Non-domain query
-            
+
         Returns:
             Professional response explaining system capabilities
         """
         system_prompt = self._get_non_domain_prompt()
-        
+
         messages = [
             SystemMessage(content=system_prompt),
             HumanMessage(content=f"Non-domain query: {query}")
         ]
-        
+
         try:
             response = self.model.invoke(messages)
             return {
@@ -177,25 +179,26 @@ class DataEngineerAgent:
                 "query_type": "non_domain",
                 "original_query": query
             }
-    
+
     def handle_ambiguous_query(self, query: str, analysis: Dict[str, Any]) -> Dict[str, Any]:
         """
         Handle ambiguous queries by providing database context and guidance
-        
+
         Args:
             query: Ambiguous query
             analysis: Query analysis results
-            
+
         Returns:
             Professional response with database context and guidance
         """
         system_prompt = self._get_ambiguous_prompt()
-        
+
         messages = [
             SystemMessage(content=system_prompt),
-            HumanMessage(content=f"Ambiguous query: {query}\nAnalysis: {json.dumps(analysis)}")
+            HumanMessage(
+                content=f"Ambiguous query: {query}\nAnalysis: {json.dumps(analysis)}")
         ]
-        
+
         try:
             response = self.model.invoke(messages)
             return {
@@ -212,27 +215,28 @@ class DataEngineerAgent:
                 "query_type": "ambiguous",
                 "original_query": query
             }
-    
+
     def handle_sql_query_without_agent(self, query: str) -> Dict[str, Any]:
         """
         Handle SQL-related queries when SQL agent is not available
-        
+
         Args:
             query: SQL-related query
-            
+
         Returns:
             Professional response with database context and guidance
         """
         # First, diagnose the actual issue
         diagnosis = self._diagnose_sql_agent_issue()
-        
+
         system_prompt = self._get_sql_guidance_prompt()
-        
+
         messages = [
             SystemMessage(content=system_prompt),
-            HumanMessage(content=f"SQL-related query: {query}\n\nDiagnosis: {diagnosis}")
+            HumanMessage(
+                content=f"SQL-related query: {query}\n\nDiagnosis: {diagnosis}")
         ]
-        
+
         try:
             response = self.model.invoke(messages)
             return {
@@ -261,45 +265,47 @@ class DataEngineerAgent:
                     "data": []
                 }
             }
-    
+
     def _diagnose_sql_agent_issue(self) -> str:
         """
         Diagnose why the SQL agent is not working
-        
+
         Returns:
             String describing the root cause
         """
         issues = []
-        
+
         # Check if psycopg2 is available
         try:
             import psycopg2
             issues.append("✅ psycopg2 is available")
         except ImportError:
-            issues.append("❌ psycopg2 is not available - install with: pip install psycopg2-binary")
-        
+            issues.append(
+                "❌ psycopg2 is not available - install with: pip install psycopg2-binary")
+
         # Check if SQL agent can be imported
         try:
             from my_agent.utils.sql_agent import SQLQueryExecutor
             issues.append("✅ SQL agent module can be imported")
         except ImportError as e:
             issues.append(f"❌ SQL agent module import failed: {e}")
-        
+
         # Check environment variables
         import os
         openai_key = os.getenv("OPENAPI_KEY") or os.getenv("OPENAI_API_KEY")
         postgres_url = os.getenv("POSTGRES_DB_URL")
-        
+
         if openai_key:
             issues.append("✅ OpenAI API key is set")
         else:
-            issues.append("❌ OpenAI API key is not set (OPENAPI_KEY or OPENAI_API_KEY)")
-        
+            issues.append(
+                "❌ OpenAI API key is not set (OPENAPI_KEY or OPENAI_API_KEY)")
+
         if postgres_url:
             issues.append("✅ PostgreSQL URL is set")
         else:
             issues.append("❌ PostgreSQL URL is not set (POSTGRES_DB_URL)")
-        
+
         # Try to initialize SQL agent to see what fails
         if all(["✅" in issue for issue in issues[:4]]):  # If all basic checks pass
             try:
@@ -308,16 +314,16 @@ class DataEngineerAgent:
                 return "SQL agent should be working - this might be a LangGraph Studio environment issue"
             except Exception as e:
                 issues.append(f"❌ SQL agent initialization failed: {e}")
-        
+
         # Check if we're in LangGraph Studio context
         try:
             import langgraph
             issues.append("✅ LangGraph is available")
         except ImportError:
             issues.append("❌ LangGraph is not available")
-        
+
         return "\n".join(issues)
-    
+
     def _get_analysis_prompt(self) -> str:
         """Get the system prompt for query analysis"""
         return f"""
@@ -339,11 +345,11 @@ Analyze the query and return a JSON object with:
 EXAMPLES:
 - "Show me everything" → {{"is_clear": false, "query_type": "ambiguous", "domain_relevance": "none", "complexity_level": "simple", "confidence": 0.1, "issues": ["Too vague", "No specific domain"], "suggested_domain": "none"}}
 - "What's the weather like?" → {{"is_clear": true, "query_type": "non_domain", "domain_relevance": "none", "complexity_level": "simple", "confidence": 1.0, "issues": ["Outside system scope"], "suggested_domain": "none"}}
-- "Find employees with perfect attendance who placed orders over $100" → {{"is_clear": true, "query_type": "clear", "domain_relevance": "hybrid", "complexity_level": "medium", "confidence": 0.9, "issues": [], "suggested_domain": "hybrid"}}
+- "Find employees with perfect attendance who bought office supplies" → {{"is_clear": true, "query_type": "clear", "domain_relevance": "hybrid", "complexity_level": "medium", "confidence": 0.9, "issues": [], "suggested_domain": "hybrid"}}
 - "Show all employees in IT department" → {{"is_clear": true, "query_type": "clear", "domain_relevance": "employee", "complexity_level": "simple", "confidence": 0.9, "issues": [], "suggested_domain": "employee"}}
 
 IMPORTANT RULES:
-- Queries that combine employee data (attendance, departments, projects) with movie data (movies, comments, ratings) should be classified as "hybrid" domain_relevance and "clear" query_type
+- Queries that combine employee data (attendance, departments, projects) with supplies data (sales, customers, items, stores) should be classified as "hybrid" domain_relevance and "clear" query_type
 - Only queries completely outside the system scope (weather, cooking, etc.) should be "non_domain"
 - Hybrid queries are valid and should be processed by the system
 - Direct SQL/NoSQL queries should be classified as "clear" with appropriate domain_relevance
@@ -351,7 +357,7 @@ IMPORTANT RULES:
 
 Return ONLY the JSON object.
 """
-    
+
     def _get_clarification_prompt(self) -> str:
         """Get the system prompt for generating clarification suggestions"""
         return f"""
@@ -371,9 +377,9 @@ For "Show me everything":
 {{
       "suggestions": [
         "Show all employees in the company",
-        "Find action movies with high ratings",
+        "Find sales with high customer satisfaction",
         "Display all departments and their budgets",
-        "Show movies from 2020",
+        "Show sales from 2020",
         "List all active projects and their status"
       ]
 }}
@@ -382,7 +388,7 @@ For "What's the data?":
 {{
       "suggestions": [
         "Show a summary of employee data",
-        "Display movie database overview",
+        "Display supplies database overview",
         "List all available data categories",
         "Show sample data from each database"
       ]
@@ -390,7 +396,7 @@ For "What's the data?":
 
 Return ONLY the JSON object.
 """
-    
+
     def _get_technical_prompt(self) -> str:
         """Get the system prompt for handling technical queries"""
         return f"""
@@ -418,7 +424,7 @@ EXAMPLES:
 
 Be helpful, accurate, and professional.
 """
-    
+
     def _get_non_domain_prompt(self) -> str:
         """Get the system prompt for handling non-domain queries"""
         return f"""
@@ -452,7 +458,7 @@ Would you like to explore any of these areas instead?"
 
 Be helpful and professional while clearly defining system boundaries.
 """
-    
+
     def _get_ambiguous_prompt(self) -> str:
         """Get the system prompt for handling ambiguous queries"""
         return f"""
@@ -499,7 +505,7 @@ What specific information would you like to see?"
 
 Be helpful, informative, and guide users toward specific, actionable queries.
 """
-    
+
     def _get_sql_guidance_prompt(self) -> str:
         """Get the system prompt for handling SQL queries when SQL agent is not available"""
         return f"""
@@ -553,7 +559,7 @@ In the meantime, you can ask me about the database structure, available tables, 
 
 Be helpful, informative, and maintain a professional tone while explaining the technical situation.
 """
-    
+
     def _get_default_analysis(self, query: str) -> Dict[str, Any]:
         """Get default analysis when LLM fails"""
         return {
@@ -565,7 +571,7 @@ Be helpful, informative, and maintain a professional tone while explaining the t
             "issues": ["Unable to analyze query"],
             "suggested_domain": "none"
         }
-    
+
     def _get_default_suggestions(self, query: str) -> List[str]:
         """Get default suggestions when LLM fails"""
         return [
@@ -573,4 +579,4 @@ Be helpful, informative, and maintain a professional tone while explaining the t
             "Find action movies with high ratings",
             "Display all departments and their budgets",
             "Show movies from 2020"
-        ] 
+        ]

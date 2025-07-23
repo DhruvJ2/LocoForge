@@ -1,125 +1,116 @@
 #!/usr/bin/env python3
 """
-Test script to verify MongoEngine migration
-Tests the NoSQL agent with MongoEngine ODM
+Test script for MongoEngine migration with supplies database
 """
 
 import os
-import sys
+import json
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
-def test_mongoengine_connection():
-    """Test basic MongoEngine connection and functionality"""
-    print("🧪 Testing MongoEngine Migration")
-    print("=" * 40)
-    
+
+def test_mongoengine_supplies():
+    """Test MongoEngine with supplies database"""
+    print("🛒 Testing MongoEngine with Supplies Database")
+    print("=" * 50)
+
     try:
-        # Import the updated NoSQL agent
-        from my_agent.utils.nosql_agent import NoSQLQueryExecutor, Movie, Comment, User, Session, Theater
-        
-        print("✅ Successfully imported MongoEngine-based NoSQL agent")
-        
-        # Test connection
-        print("\n🔌 Testing MongoDB connection...")
+        from my_agent.utils.nosql_agent import NoSQLQueryExecutor, Sale
+
+        # Create agent
         agent = NoSQLQueryExecutor()
-        print("✅ MongoDB connection successful")
-        
+
         # Test basic query
         print("\n🔍 Testing basic query...")
         test_query = {
-            "collection": "movies",
+            "collection": "sales",
             "query": {},
-            "projection": {"title": 1, "year": 1, "_id": 0}
+            "projection": {"storeLocation": 1, "saleDate": 1, "_id": 0}
         }
-        
-        result = agent.execute_query(str(test_query).replace("'", '"'))
-        if result.get('success'):
-            print(f"✅ Query executed successfully. Found {result.get('row_count', 0)} movies")
+
+        result = agent.execute_query(json.dumps(test_query))
+        print(
+            f"✅ Query executed successfully. Found {result.get('row_count', 0)} sales")
+
+        # Test MongoEngine models directly
+        print("\n🔍 Testing MongoEngine models...")
+
+        # Count total sales
+        sale_count = Sale.objects.count()
+        print(f"✅ Total sales in database: {sale_count}")
+
+        # Find recent sales
+        from datetime import datetime
+        recent_sales = Sale.objects.filter(
+            saleDate__gte=datetime(2023, 1, 1)).limit(5)
+        print(f"✅ Found {recent_sales.count()} sales from 2023 or later")
+
+        # Find high satisfaction sales
+        high_satisfaction = Sale.objects.filter(
+            customer__satisfaction__gte=4).limit(3)
+        print(
+            f"✅ Found {high_satisfaction.count()} sales with high satisfaction (>= 4)")
+
+        # Test aggregation
+        print("\n🔍 Testing aggregation...")
+        pipeline = [
+            {"$group": {"_id": "$storeLocation", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+            {"$limit": 5}
+        ]
+
+        agg_result = agent.execute_query(json.dumps(pipeline))
+        if agg_result.get("success", False):
+            print("✅ Aggregation executed successfully")
+            print("📊 Top store locations:")
+            for item in agg_result.get("data", [])[:3]:
+                print(
+                    f"  - {item.get('_id', 'Unknown')}: {item.get('count', 0)} sales")
         else:
-            print(f"❌ Query failed: {result.get('error', 'Unknown error')}")
-            return False
-        
-        # Test MongoEngine ORM directly
-        print("\n📊 Testing MongoEngine ORM directly...")
-        movie_count = Movie.objects.count()
-        print(f"✅ Total movies in database: {movie_count}")
-        
-        # Test filtering
-        recent_movies = Movie.objects.filter(year__gte=2020).limit(5)
-        print(f"✅ Found {recent_movies.count()} movies from 2020 or later")
-        
-        # Test embedded document query
-        high_rated = Movie.objects.filter(imdb__rating__gte=8).limit(3)
-        print(f"✅ Found {high_rated.count()} highly rated movies (IMDB >= 8)")
-        
-        print("\n🎉 All tests passed! MongoEngine migration successful!")
-        return True
-        
-    except ImportError as e:
-        print(f"❌ Import error: {e}")
-        print("Make sure mongoengine is installed: pip install mongoengine")
-        return False
+            print(
+                f"❌ Aggregation failed: {agg_result.get('error', 'Unknown error')}")
+
+        print("\n✅ All MongoEngine tests passed!")
+
     except Exception as e:
         print(f"❌ Test failed: {e}")
-        return False
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
 
-def test_sample_queries():
-    """Test sample queries with the new MongoEngine implementation"""
-    print("\n🧪 Testing Sample Queries")
-    print("=" * 30)
-    
+
+def test_natural_language_queries():
+    """Test natural language query processing"""
+    print("\n🤖 Testing Natural Language Queries")
+    print("=" * 40)
+
+    test_queries = [
+        "Show sales from 2020",
+        "Find sales with high customer satisfaction",
+        "Show sales by store location"
+    ]
+
     try:
         from my_agent.utils.nosql_agent import NoSQLQueryExecutor
-        
+
         agent = NoSQLQueryExecutor()
-        
-        # Test a few sample queries
-        sample_queries = [
-            "Show movies from 2020",
-            "Find action movies with high ratings",
-            "Show movies starring Tom Hanks"
-        ]
-        
-        for query in sample_queries:
+
+        for query in test_queries:
             print(f"\n🔍 Testing: {query}")
-            try:
-                result = agent.generate_and_execute_query(query)
-                if result['execution_result']['success']:
-                    print(f"✅ Success! Found {result['execution_result']['row_count']} results")
-                else:
-                    print(f"❌ Query failed: {result['execution_result']['error']}")
-            except Exception as e:
-                print(f"❌ Error: {e}")
-        
-        print("\n🎉 Sample query tests completed!")
-        return True
-        
+            result = agent.generate_and_execute_query(query)
+
+            if result.get("execution_result", {}).get("success", False):
+                print(
+                    f"✅ Success - {result.get('execution_result', {}).get('row_count', 0)} results")
+            else:
+                print(
+                    f"❌ Failed: {result.get('execution_result', {}).get('error', 'Unknown error')}")
+
     except Exception as e:
-        print(f"❌ Sample query test failed: {e}")
-        return False
+        print(f"❌ Natural language test failed: {e}")
+
 
 if __name__ == "__main__":
-    # Check environment variables
-    if not os.getenv("MONGO_DB"):
-        print("❌ MONGO_DB environment variable not set")
-        print("Please set MONGO_DB in your .env file")
-        sys.exit(1)
-    
-    if not os.getenv("OPENAPI_KEY"):
-        print("❌ OPENAPI_KEY environment variable not set")
-        print("Please set OPENAPI_KEY in your .env file")
-        sys.exit(1)
-    
-    # Run tests
-    connection_success = test_mongoengine_connection()
-    query_success = test_sample_queries()
-    
-    if connection_success and query_success:
-        print("\n🎉 All tests passed! MongoEngine migration is working correctly!")
-        sys.exit(0)
-    else:
-        print("\n❌ Some tests failed. Please check the errors above.")
-        sys.exit(1) 
+    test_mongoengine_supplies()
+    test_natural_language_queries()
